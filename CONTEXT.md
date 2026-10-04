@@ -20,6 +20,10 @@ _Avoid_: Piece, token, disc
 A point on the board grid where a stone may be placed.
 _Avoid_: Cell, square, tile
 
+**Stone Preview**:
+A temporary visual marker showing where the current player is about to place a stone before confirming the move.
+_Avoid_: Cursor, ghost piece
+
 **Liberty**:
 An empty intersection directly adjacent to a stone or connected group of stones.
 _Avoid_: Breath, life point
@@ -75,6 +79,18 @@ _Avoid_: Rewind, takeback
 **Move List**:
 The visible sequence of moves and passes in the current game.
 _Avoid_: SGF, replay
+
+**Komi**:
+Bonus score awarded to White to offset Black's first-move advantage.
+_Avoid_: Bonus, handicap points
+
+**Game Setup**:
+The pre-game choices that define a new local game, limited in the MVP to board size and komi.
+_Avoid_: Lobby, match settings
+
+**Saved Game**:
+The unfinished local game restored after a browser refresh on the same device.
+_Avoid_: Cloud save, archive
 
 **Local Play**:
 Human-versus-human play on the same device.
