@@ -124,3 +124,35 @@ test("resignation immediately ends the game for the opponent", () => {
   assert.equal(state.result.winner, constants.WHITE);
   assert.match(state.message, /resigned/i);
 });
+
+test("undo restores the previous local game state", () => {
+  const game = new GoGame({ size: 9 });
+
+  game.play(0, 0);
+  game.play(1, 0);
+  const undo = game.undo();
+  const state = game.snapshot();
+
+  assert.equal(undo.ok, true);
+  assert.equal(state.board[0][0], constants.BLACK);
+  assert.equal(state.board[0][1], constants.EMPTY);
+  assert.equal(state.currentPlayer, constants.WHITE);
+  assert.equal(state.moveHistory.length, 1);
+});
+
+test("serialized unfinished game restores board and undo history", () => {
+  const game = new GoGame({ size: 13, komi: 7.5 });
+  game.play(3, 3);
+  game.play(4, 3);
+
+  const restored = new GoGame();
+  restored.restore(game.serialize());
+  restored.undo();
+  const state = restored.snapshot();
+
+  assert.equal(state.size, 13);
+  assert.equal(state.komi, 7.5);
+  assert.equal(state.board[3][3], constants.BLACK);
+  assert.equal(state.board[3][4], constants.EMPTY);
+  assert.equal(state.currentPlayer, constants.WHITE);
+});

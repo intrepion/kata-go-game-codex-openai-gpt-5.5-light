@@ -140,13 +140,22 @@ h2 {
 
 .action-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   margin-top: 12px;
 }
 
 .action-row button:nth-child(2) {
   background: #7d4b3f;
+}
+
+.action-row button:nth-child(3) {
+  background: #5c6470;
+}
+
+.action-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
 }
 
 .score-strip {

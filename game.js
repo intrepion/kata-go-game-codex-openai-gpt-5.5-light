@@ -43,6 +43,7 @@
       this.captures = { [BLACK]: 0, [WHITE]: 0 };
       this.moveHistory = [];
       this.positionHistory = new Set([boardKey(this.board)]);
+      this.undoStack = [];
       this.lastMove = null;
       this.lastCaptures = [];
       this.koPoint = null;
@@ -54,6 +55,7 @@
     }
 
     play(x, y) {
+      const before = this.serialize();
       if (this.gameOver) {
         return this.reject("The game is over. Start a new game to play again.");
       }
@@ -105,6 +107,7 @@
         label: pointLabel({ x, y }),
         captures: captured.map((stone) => ({ ...stone }))
       };
+      this.undoStack.push(before);
       this.captures[this.currentPlayer] += captured.length;
       this.moveHistory.push(move);
       this.positionHistory.add(nextKey);
@@ -120,11 +123,13 @@
     }
 
     pass() {
+      const before = this.serialize();
       if (this.gameOver) {
         return this.reject("The game is over. Start a new game to play again.");
       }
       const passingPlayer = this.currentPlayer;
       const move = { type: "pass", color: passingPlayer };
+      this.undoStack.push(before);
       this.moveHistory.push(move);
       this.lastMove = null;
       this.lastCaptures = [];
@@ -144,12 +149,14 @@
     }
 
     resign() {
+      const before = this.serialize();
       if (this.gameOver) {
         return this.reject("The game is over. Start a new game to play again.");
       }
       const resigned = this.currentPlayer;
       const winner = opponent(resigned);
       const move = { type: "resign", color: resigned };
+      this.undoStack.push(before);
       this.moveHistory.push(move);
       this.gameOver = true;
       this.result = {
@@ -164,6 +171,16 @@
       };
       this.message = `${COLORS[resigned]} resigned. ${COLORS[winner]} wins.`;
       return { ok: true, move, snapshot: this.snapshot() };
+    }
+
+    undo() {
+      const previous = this.undoStack.pop();
+      if (!previous) {
+        return this.reject("There is no move to undo.");
+      }
+      this.restore(previous);
+      this.message = `Undid the last action. ${COLORS[this.currentPlayer]} to play.`;
+      return { ok: true, snapshot: this.snapshot() };
     }
 
     reject(reason) {
@@ -309,12 +326,63 @@
         koPoint: this.koPoint ? { ...this.koPoint } : null,
         consecutivePasses: this.consecutivePasses,
         gameOver: this.gameOver,
+        canUndo: this.undoStack.length > 0,
         result: this.result ? {
           ...this.result,
           territory: this.result.territory ? cloneBoard(this.result.territory) : null
         } : null,
         message: this.message
       };
+    }
+
+    serialize() {
+      return {
+        size: this.size,
+        komi: this.komi,
+        board: cloneBoard(this.board),
+        currentPlayer: this.currentPlayer,
+        captures: { ...this.captures },
+        moveHistory: this.moveHistory.map((move) => ({
+          ...move,
+          captures: move.captures ? move.captures.map((stone) => ({ ...stone })) : undefined
+        })),
+        positionHistory: Array.from(this.positionHistory),
+        undoStack: this.undoStack.map((entry) => JSON.parse(JSON.stringify(entry))),
+        lastMove: this.lastMove ? { ...this.lastMove } : null,
+        lastCaptures: this.lastCaptures.map((stone) => ({ ...stone })),
+        koPoint: this.koPoint ? { ...this.koPoint } : null,
+        consecutivePasses: this.consecutivePasses,
+        gameOver: this.gameOver,
+        result: this.result ? {
+          ...this.result,
+          territory: this.result.territory ? cloneBoard(this.result.territory) : null
+        } : null,
+        message: this.message
+      };
+    }
+
+    restore(state) {
+      this.size = state.size;
+      this.komi = state.komi;
+      this.board = cloneBoard(state.board);
+      this.currentPlayer = state.currentPlayer;
+      this.captures = { ...state.captures };
+      this.moveHistory = state.moveHistory.map((move) => ({
+        ...move,
+        captures: move.captures ? move.captures.map((stone) => ({ ...stone })) : undefined
+      }));
+      this.positionHistory = new Set(state.positionHistory || [boardKey(this.board)]);
+      this.undoStack = (state.undoStack || []).map((entry) => JSON.parse(JSON.stringify(entry)));
+      this.lastMove = state.lastMove ? { ...state.lastMove } : null;
+      this.lastCaptures = (state.lastCaptures || []).map((stone) => ({ ...stone }));
+      this.koPoint = state.koPoint ? { ...state.koPoint } : null;
+      this.consecutivePasses = state.consecutivePasses || 0;
+      this.gameOver = Boolean(state.gameOver);
+      this.result = state.result ? {
+        ...state.result,
+        territory: state.result.territory ? cloneBoard(state.result.territory) : null
+      } : null;
+      this.message = state.message || `${COLORS[this.currentPlayer]} to play.`;
     }
   }
 
@@ -333,6 +401,7 @@
       this.whiteCaptures = documentRef.getElementById("white-captures");
       this.passButton = documentRef.getElementById("pass-button");
       this.resignButton = documentRef.getElementById("resign-button");
+      this.undoButton = documentRef.getElementById("undo-button");
       this.scoreCard = documentRef.getElementById("score-card");
       this.scoreSummary = documentRef.getElementById("score-summary");
       this.hoverPoint = null;
@@ -340,6 +409,7 @@
         size: Number(this.boardSize.value),
         komi: Number(this.komi.value)
       });
+      this.restoreSavedGame();
       this.bind();
       this.render();
     }
@@ -352,6 +422,7 @@
           komi: Number(this.komi.value)
         });
         this.hoverPoint = null;
+        this.persist();
         this.render();
       });
 
@@ -372,20 +443,52 @@
         }
         this.game.play(point.x, point.y);
         this.hoverPoint = point;
+        this.persist();
         this.render();
       });
 
       this.passButton.addEventListener("click", () => {
         this.game.pass();
         this.hoverPoint = null;
+        this.persist();
         this.render();
       });
 
       this.resignButton.addEventListener("click", () => {
         this.game.resign();
         this.hoverPoint = null;
+        this.persist();
         this.render();
       });
+
+      this.undoButton.addEventListener("click", () => {
+        this.game.undo();
+        this.hoverPoint = null;
+        this.persist();
+        this.render();
+      });
+    }
+
+    restoreSavedGame() {
+      try {
+        const raw = root.localStorage && root.localStorage.getItem("go-game-state");
+        if (!raw) {
+          return;
+        }
+        this.game.restore(JSON.parse(raw));
+        this.boardSize.value = String(this.game.size);
+        this.komi.value = String(this.game.komi);
+      } catch (error) {
+        if (root.localStorage) {
+          root.localStorage.removeItem("go-game-state");
+        }
+      }
+    }
+
+    persist() {
+      if (root.localStorage) {
+        root.localStorage.setItem("go-game-state", JSON.stringify(this.game.serialize()));
+      }
     }
 
     eventToPoint(event) {
@@ -428,6 +531,7 @@
       this.whiteCaptures.textContent = String(snapshot.captures[WHITE]);
       this.passButton.disabled = snapshot.gameOver;
       this.resignButton.disabled = snapshot.gameOver;
+      this.undoButton.disabled = !snapshot.canUndo;
       this.renderScore(snapshot);
       this.renderMoveList(snapshot);
       this.drawBoard(snapshot);
@@ -498,6 +602,9 @@
 
       if (this.hoverPoint && snapshot.board[this.hoverPoint.y][this.hoverPoint.x] === EMPTY) {
         this.drawStone(this.hoverPoint.x, this.hoverPoint.y, snapshot.currentPlayer, layout, 0.46);
+        this.drawLiberties(this.game.libertiesAt(this.hoverPoint.x, this.hoverPoint.y), layout);
+      } else if (snapshot.lastMove) {
+        this.drawLiberties(this.game.libertiesAt(snapshot.lastMove.x, snapshot.lastMove.y), layout);
       }
 
       this.drawRuleMarkers(snapshot, layout);
@@ -570,6 +677,18 @@
         ctx.fillStyle = "rgba(165, 62, 50, 0.9)";
         ctx.beginPath();
         ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    drawLiberties(liberties, layout) {
+      const ctx = this.context;
+      ctx.fillStyle = "rgba(47, 111, 104, 0.82)";
+      for (const liberty of liberties) {
+        const cx = layout.margin + liberty.x * layout.gap;
+        const cy = layout.margin + liberty.y * layout.gap;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 4, 0, Math.PI * 2);
         ctx.fill();
       }
     }
