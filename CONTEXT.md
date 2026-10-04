@@ -92,6 +92,10 @@ _Avoid_: Lobby, match settings
 The unfinished local game restored after a browser refresh on the same device.
 _Avoid_: Cloud save, archive
 
+**MVP Slice**:
+A shippable increment that leaves the local Go game in a browser-checkable state.
+_Avoid_: Phase, milestone
+
 **Local Play**:
 Human-versus-human play on the same device.
 _Avoid_: Multiplayer, online play, hotseat
