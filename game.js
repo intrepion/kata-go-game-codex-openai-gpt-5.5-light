@@ -21,6 +21,10 @@
     return board.map((row) => row.slice());
   }
 
+  function boardKey(board) {
+    return board.map((row) => row.join("")).join("/");
+  }
+
   function pointLabel(point) {
     return `${String.fromCharCode(65 + point.x)}${point.y + 1}`;
   }
@@ -38,7 +42,10 @@
       this.currentPlayer = BLACK;
       this.captures = { [BLACK]: 0, [WHITE]: 0 };
       this.moveHistory = [];
+      this.positionHistory = new Set([boardKey(this.board)]);
       this.lastMove = null;
+      this.lastCaptures = [];
+      this.koPoint = null;
       this.message = "Black to play.";
       return this.snapshot();
     }
@@ -52,17 +59,56 @@
       }
 
       this.board[y][x] = this.currentPlayer;
+      const captured = [];
+      for (const neighbor of this.neighbors(x, y)) {
+        if (this.board[neighbor.y][neighbor.x] !== opponent(this.currentPlayer)) {
+          continue;
+        }
+        const group = this.collectGroup(neighbor.x, neighbor.y);
+        if (group.liberties.size === 0) {
+          for (const stone of group.stones) {
+            this.board[stone.y][stone.x] = EMPTY;
+            captured.push(stone);
+          }
+        }
+      }
+
+      const ownGroup = this.collectGroup(x, y);
+      if (ownGroup.liberties.size === 0) {
+        this.board[y][x] = EMPTY;
+        for (const stone of captured) {
+          this.board[stone.y][stone.x] = opponent(this.currentPlayer);
+        }
+        return this.reject("Illegal suicide: that move leaves the placed group with no liberties.");
+      }
+
+      const nextKey = boardKey(this.board);
+      if (this.positionHistory.has(nextKey)) {
+        this.board[y][x] = EMPTY;
+        for (const stone of captured) {
+          this.board[stone.y][stone.x] = opponent(this.currentPlayer);
+        }
+        return this.reject("Illegal ko: that move repeats an earlier board position.");
+      }
+
       const move = {
         type: "play",
         color: this.currentPlayer,
         x,
         y,
-        label: pointLabel({ x, y })
+        label: pointLabel({ x, y }),
+        captures: captured.map((stone) => ({ ...stone }))
       };
+      this.captures[this.currentPlayer] += captured.length;
       this.moveHistory.push(move);
+      this.positionHistory.add(nextKey);
       this.lastMove = { x, y, color: this.currentPlayer };
+      this.lastCaptures = captured.map((stone) => ({ ...stone }));
+      this.koPoint = captured.length === 1 ? { ...captured[0] } : null;
       this.currentPlayer = opponent(this.currentPlayer);
-      this.message = `${COLORS[this.currentPlayer]} to play.`;
+      this.message = captured.length > 0
+        ? `${COLORS[move.color]} captured ${captured.length}. ${COLORS[this.currentPlayer]} to play.`
+        : `${COLORS[this.currentPlayer]} to play.`;
       return { ok: true, move, snapshot: this.snapshot() };
     }
 
@@ -75,6 +121,53 @@
       return Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < this.size && y < this.size;
     }
 
+    neighbors(x, y) {
+      return [
+        { x: x - 1, y },
+        { x: x + 1, y },
+        { x, y: y - 1 },
+        { x, y: y + 1 }
+      ].filter((point) => this.isOnBoard(point.x, point.y));
+    }
+
+    collectGroup(x, y) {
+      const color = this.board[y][x];
+      const stack = [{ x, y }];
+      const seen = new Set();
+      const stones = [];
+      const liberties = new Set();
+
+      while (stack.length > 0) {
+        const point = stack.pop();
+        const key = `${point.x},${point.y}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        stones.push(point);
+        for (const neighbor of this.neighbors(point.x, point.y)) {
+          const value = this.board[neighbor.y][neighbor.x];
+          if (value === EMPTY) {
+            liberties.add(`${neighbor.x},${neighbor.y}`);
+          } else if (value === color) {
+            stack.push(neighbor);
+          }
+        }
+      }
+
+      return { stones, liberties };
+    }
+
+    libertiesAt(x, y) {
+      if (!this.isOnBoard(x, y) || this.board[y][x] === EMPTY) {
+        return [];
+      }
+      return Array.from(this.collectGroup(x, y).liberties).map((key) => {
+        const [px, py] = key.split(",").map(Number);
+        return { x: px, y: py };
+      });
+    }
+
     snapshot() {
       return {
         size: this.size,
@@ -84,6 +177,8 @@
         captures: { ...this.captures },
         moveHistory: this.moveHistory.map((move) => ({ ...move })),
         lastMove: this.lastMove ? { ...this.lastMove } : null,
+        lastCaptures: this.lastCaptures.map((stone) => ({ ...stone })),
+        koPoint: this.koPoint ? { ...this.koPoint } : null,
         message: this.message
       };
     }
@@ -177,7 +272,7 @@
     render() {
       const snapshot = this.game.snapshot();
       this.status.textContent = snapshot.message;
-      this.status.classList.toggle("is-warning", /occupied|outside/i.test(snapshot.message));
+      this.status.classList.toggle("is-warning", /occupied|outside|suicide|ko/i.test(snapshot.message));
       this.boardLabel.textContent = `${snapshot.size}x${snapshot.size}`;
       this.blackCaptures.textContent = String(snapshot.captures[BLACK]);
       this.whiteCaptures.textContent = String(snapshot.captures[WHITE]);
@@ -189,7 +284,8 @@
       this.moveList.replaceChildren();
       for (const move of snapshot.moveHistory) {
         const item = this.document.createElement("li");
-        item.textContent = `${COLORS[move.color]} ${move.label}`;
+        const captureText = move.captures && move.captures.length > 0 ? ` x${move.captures.length}` : "";
+        item.textContent = `${COLORS[move.color]} ${move.label}${captureText}`;
         this.moveList.appendChild(item);
       }
     }
@@ -231,6 +327,8 @@
       if (this.hoverPoint && snapshot.board[this.hoverPoint.y][this.hoverPoint.x] === EMPTY) {
         this.drawStone(this.hoverPoint.x, this.hoverPoint.y, snapshot.currentPlayer, layout, 0.46);
       }
+
+      this.drawRuleMarkers(snapshot, layout);
     }
 
     drawStarPoints(size, layout) {
@@ -269,6 +367,38 @@
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+    }
+
+    drawRuleMarkers(snapshot, layout) {
+      const ctx = this.context;
+      if (snapshot.lastMove) {
+        const cx = layout.margin + snapshot.lastMove.x * layout.gap;
+        const cy = layout.margin + snapshot.lastMove.y * layout.gap;
+        ctx.strokeStyle = snapshot.lastMove.color === BLACK ? "#f7efe2" : "#24201b";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, layout.stoneRadius * 0.42, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      for (const stone of snapshot.lastCaptures) {
+        const cx = layout.margin + stone.x * layout.gap;
+        const cy = layout.margin + stone.y * layout.gap;
+        ctx.strokeStyle = "#a53e32";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, layout.stoneRadius * 0.55, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      if (snapshot.koPoint) {
+        const cx = layout.margin + snapshot.koPoint.x * layout.gap;
+        const cy = layout.margin + snapshot.koPoint.y * layout.gap;
+        ctx.fillStyle = "rgba(165, 62, 50, 0.9)";
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 

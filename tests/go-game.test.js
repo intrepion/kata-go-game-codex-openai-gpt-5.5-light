@@ -40,3 +40,59 @@ test("occupied intersections are rejected without changing turns", () => {
   assert.equal(state.currentPlayer, constants.WHITE);
   assert.equal(state.moveHistory.length, 1);
 });
+
+test("a surrounded opposing group is captured and removed", () => {
+  const game = new GoGame({ size: 9 });
+
+  game.play(1, 0); // Black
+  game.play(1, 1); // White
+  game.play(0, 1); // Black
+  game.play(4, 4); // White
+  game.play(2, 1); // Black
+  game.play(5, 5); // White
+  const result = game.play(1, 2); // Black captures White at B2
+  const state = game.snapshot();
+
+  assert.equal(result.ok, true);
+  assert.equal(state.board[1][1], constants.EMPTY);
+  assert.equal(state.captures[constants.BLACK], 1);
+  assert.equal(state.lastCaptures.length, 1);
+});
+
+test("suicide moves are illegal when they capture no opposing stones", () => {
+  const game = new GoGame({ size: 9 });
+
+  game.play(1, 0); // Black
+  game.play(4, 4); // White
+  game.play(0, 1); // Black
+  game.play(5, 5); // White
+  game.play(2, 1); // Black
+  game.play(6, 6); // White
+  game.play(1, 2); // Black
+  const result = game.play(1, 1); // White suicide
+  const state = game.snapshot();
+
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /suicide/i);
+  assert.equal(state.board[1][1], constants.EMPTY);
+  assert.equal(state.currentPlayer, constants.WHITE);
+});
+
+test("ko rejects an immediate board repetition", () => {
+  const game = new GoGame({ size: 9 });
+
+  game.play(1, 0); // B
+  game.play(2, 0); // W
+  game.play(0, 1); // B
+  game.play(3, 1); // W
+  game.play(1, 2); // B
+  game.play(2, 2); // W
+  game.play(4, 4); // B elsewhere
+  game.play(1, 1); // W into atari
+  const capture = game.play(2, 1); // B captures W at B2
+  const recapture = game.play(1, 1); // W immediate ko recapture
+
+  assert.equal(capture.ok, true);
+  assert.equal(recapture.ok, false);
+  assert.match(recapture.reason, /ko/i);
+});
