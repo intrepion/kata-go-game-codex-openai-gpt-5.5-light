@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Go Game</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="board-region" aria-label="Go board">
+        <canvas id="board" width="760" height="760" aria-label="Playable Go board"></canvas>
+      </section>
+
+      <aside class="side-panel" aria-label="Game controls">
+        <header>
+          <p class="eyebrow">Local Play</p>
+          <h1>Go Game</h1>
+          <p id="status" class="status" role="status">Black to play.</p>
+        </header>
+
+        <form id="setup-form" class="setup-form">
+          <label>
+            Board size
+            <select id="board-size" name="size">
+              <option value="9">9x9</option>
+              <option value="13">13x13</option>
+              <option value="19">19x19</option>
+            </select>
+          </label>
+
+          <label>
+            Komi
+            <input id="komi" name="komi" type="number" value="6.5" step="0.5">
+          </label>
+
+          <button type="submit">New game</button>
+        </form>
+
+        <dl class="score-strip">
+          <div>
+            <dt>Board</dt>
+            <dd id="board-label">9x9</dd>
+          </div>
+          <div>
+            <dt>Black</dt>
+            <dd id="black-captures">0</dd>
+          </div>
+          <div>
+            <dt>White</dt>
+            <dd id="white-captures">0</dd>
+          </div>
+        </dl>
+
+        <section>
+          <h2>Move List</h2>
+          <ol id="move-list" class="move-list" aria-label="Move list"></ol>
+        </section>
+      </aside>
+    </main>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
