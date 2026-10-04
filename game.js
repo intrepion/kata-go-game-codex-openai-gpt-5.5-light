@@ -42,7 +42,7 @@
       this.currentPlayer = BLACK;
       this.captures = { [BLACK]: 0, [WHITE]: 0 };
       this.moveHistory = [];
-      this.positionHistory = new Set([boardKey(this.board)]);
+      this.positionHistory = [boardKey(this.board)];
       this.undoStack = [];
       this.lastMove = null;
       this.lastCaptures = [];
@@ -91,7 +91,10 @@
       }
 
       const nextKey = boardKey(this.board);
-      if (this.positionHistory.has(nextKey)) {
+      const previousPosition = this.positionHistory.length >= 2
+        ? this.positionHistory[this.positionHistory.length - 2]
+        : null;
+      if (previousPosition === nextKey) {
         this.board[y][x] = EMPTY;
         for (const stone of captured) {
           this.board[stone.y][stone.x] = opponent(this.currentPlayer);
@@ -110,7 +113,7 @@
       this.undoStack.push(before);
       this.captures[this.currentPlayer] += captured.length;
       this.moveHistory.push(move);
-      this.positionHistory.add(nextKey);
+      this.positionHistory.push(nextKey);
       this.lastMove = { x, y, color: this.currentPlayer };
       this.lastCaptures = captured.map((stone) => ({ ...stone }));
       this.koPoint = captured.length === 1 ? { ...captured[0] } : null;
@@ -346,7 +349,7 @@
           ...move,
           captures: move.captures ? move.captures.map((stone) => ({ ...stone })) : undefined
         })),
-        positionHistory: Array.from(this.positionHistory),
+        positionHistory: this.positionHistory.slice(),
         undoStack: this.undoStack.map((entry) => JSON.parse(JSON.stringify(entry))),
         lastMove: this.lastMove ? { ...this.lastMove } : null,
         lastCaptures: this.lastCaptures.map((stone) => ({ ...stone })),
@@ -371,7 +374,7 @@
         ...move,
         captures: move.captures ? move.captures.map((stone) => ({ ...stone })) : undefined
       }));
-      this.positionHistory = new Set(state.positionHistory || [boardKey(this.board)]);
+      this.positionHistory = (state.positionHistory || [boardKey(this.board)]).slice();
       this.undoStack = (state.undoStack || []).map((entry) => JSON.parse(JSON.stringify(entry)));
       this.lastMove = state.lastMove ? { ...state.lastMove } : null;
       this.lastCaptures = (state.lastCaptures || []).map((stone) => ({ ...stone }));
@@ -405,6 +408,7 @@
       this.scoreCard = documentRef.getElementById("score-card");
       this.scoreSummary = documentRef.getElementById("score-summary");
       this.hoverPoint = null;
+      this.touchPreviewPoint = null;
       this.game = new GoGame({
         size: Number(this.boardSize.value),
         komi: Number(this.komi.value)
@@ -436,13 +440,21 @@
         this.render();
       });
 
-      this.canvas.addEventListener("click", (event) => {
+      this.canvas.addEventListener("pointerup", (event) => {
         const point = this.eventToPoint(event);
         if (!point) {
           return;
         }
+        if (event.pointerType === "touch" && !this.samePoint(this.touchPreviewPoint, point)) {
+          this.touchPreviewPoint = point;
+          this.hoverPoint = point;
+          this.game.message = `Previewing ${COLORS[this.game.currentPlayer]} at ${pointLabel(point)}. Tap again to place.`;
+          this.render();
+          return;
+        }
         this.game.play(point.x, point.y);
         this.hoverPoint = point;
+        this.touchPreviewPoint = null;
         this.persist();
         this.render();
       });
@@ -486,9 +498,18 @@
     }
 
     persist() {
-      if (root.localStorage) {
+      if (!root.localStorage) {
+        return;
+      }
+      if (this.game.gameOver) {
+        root.localStorage.removeItem("go-game-state");
+      } else {
         root.localStorage.setItem("go-game-state", JSON.stringify(this.game.serialize()));
       }
+    }
+
+    samePoint(left, right) {
+      return Boolean(left && right && left.x === right.x && left.y === right.y);
     }
 
     eventToPoint(event) {

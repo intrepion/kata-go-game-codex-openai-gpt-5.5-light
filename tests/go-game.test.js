@@ -97,6 +97,25 @@ test("ko rejects an immediate board repetition", () => {
   assert.match(recapture.reason, /ko/i);
 });
 
+test("ko does not reject a later repeated position after an intervening move", () => {
+  const game = new GoGame({ size: 9 });
+
+  game.play(1, 0); // B
+  game.play(2, 0); // W
+  game.play(0, 1); // B
+  game.play(3, 1); // W
+  game.play(1, 2); // B
+  game.play(2, 2); // W
+  game.play(4, 4); // B
+  game.play(1, 1); // W
+  game.play(2, 1); // B captures W at B2
+  game.play(8, 8); // W ko threat elsewhere
+  game.play(7, 7); // B answers elsewhere
+  const recapture = game.play(1, 1); // W recaptures after intervening moves
+
+  assert.equal(recapture.ok, true);
+});
+
 test("two consecutive passes end the game and score with komi", () => {
   const game = new GoGame({ size: 9, komi: 6.5 });
 

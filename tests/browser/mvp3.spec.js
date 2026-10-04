@@ -23,5 +23,9 @@ test("root file launch ends and scores after two passes", async ({ page }) => {
   await expect(page.locator("#score-summary")).toContainText("Black 0.0 - White 6.5");
   await expect(page.locator("#pass-button")).toBeDisabled();
   await expect(page.locator("#move-list li")).toHaveText(["Black pass", "White pass"]);
+
+  await page.reload();
+  await expect(page.locator("#status")).toContainText("Black to play");
+  await expect(page.locator("#score-card")).toBeHidden();
   expect(errors).toEqual([]);
 });
