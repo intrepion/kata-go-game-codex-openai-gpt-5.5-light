@@ -138,6 +138,17 @@ h2 {
   cursor: pointer;
 }
 
+.action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.action-row button:nth-child(2) {
+  background: #7d4b3f;
+}
+
 .score-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -160,6 +171,20 @@ h2 {
 .score-strip dd {
   margin: 2px 0 0;
   font-weight: 800;
+}
+
+.score-card {
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid rgba(47, 111, 104, 0.24);
+  border-radius: 8px;
+  background: #fffaf3;
+}
+
+.score-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.35;
 }
 
 .move-list {

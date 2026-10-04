@@ -96,3 +96,31 @@ test("ko rejects an immediate board repetition", () => {
   assert.equal(recapture.ok, false);
   assert.match(recapture.reason, /ko/i);
 });
+
+test("two consecutive passes end the game and score with komi", () => {
+  const game = new GoGame({ size: 9, komi: 6.5 });
+
+  assert.equal(game.pass().ok, true);
+  const result = game.pass();
+  const state = game.snapshot();
+
+  assert.equal(result.ok, true);
+  assert.equal(state.gameOver, true);
+  assert.equal(state.result.type, "score");
+  assert.equal(state.result.black, 0);
+  assert.equal(state.result.white, 6.5);
+  assert.equal(state.result.winner, constants.WHITE);
+});
+
+test("resignation immediately ends the game for the opponent", () => {
+  const game = new GoGame({ size: 9 });
+
+  const result = game.resign();
+  const state = game.snapshot();
+
+  assert.equal(result.ok, true);
+  assert.equal(state.gameOver, true);
+  assert.equal(state.result.type, "resignation");
+  assert.equal(state.result.winner, constants.WHITE);
+  assert.match(state.message, /resigned/i);
+});

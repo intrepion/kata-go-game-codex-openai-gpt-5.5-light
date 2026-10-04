@@ -46,11 +46,17 @@
       this.lastMove = null;
       this.lastCaptures = [];
       this.koPoint = null;
+      this.consecutivePasses = 0;
+      this.gameOver = false;
+      this.result = null;
       this.message = "Black to play.";
       return this.snapshot();
     }
 
     play(x, y) {
+      if (this.gameOver) {
+        return this.reject("The game is over. Start a new game to play again.");
+      }
       if (!this.isOnBoard(x, y)) {
         return this.reject("Move is outside the board.");
       }
@@ -105,10 +111,58 @@
       this.lastMove = { x, y, color: this.currentPlayer };
       this.lastCaptures = captured.map((stone) => ({ ...stone }));
       this.koPoint = captured.length === 1 ? { ...captured[0] } : null;
+      this.consecutivePasses = 0;
       this.currentPlayer = opponent(this.currentPlayer);
       this.message = captured.length > 0
         ? `${COLORS[move.color]} captured ${captured.length}. ${COLORS[this.currentPlayer]} to play.`
         : `${COLORS[this.currentPlayer]} to play.`;
+      return { ok: true, move, snapshot: this.snapshot() };
+    }
+
+    pass() {
+      if (this.gameOver) {
+        return this.reject("The game is over. Start a new game to play again.");
+      }
+      const passingPlayer = this.currentPlayer;
+      const move = { type: "pass", color: passingPlayer };
+      this.moveHistory.push(move);
+      this.lastMove = null;
+      this.lastCaptures = [];
+      this.koPoint = null;
+      this.consecutivePasses += 1;
+
+      if (this.consecutivePasses >= 2) {
+        this.gameOver = true;
+        this.result = this.scoreGame();
+        this.message = `${this.result.winnerName} wins by ${this.result.margin.toFixed(1)}.`;
+      } else {
+        this.currentPlayer = opponent(this.currentPlayer);
+        this.message = `${COLORS[passingPlayer]} passed. ${COLORS[this.currentPlayer]} to play.`;
+      }
+
+      return { ok: true, move, snapshot: this.snapshot() };
+    }
+
+    resign() {
+      if (this.gameOver) {
+        return this.reject("The game is over. Start a new game to play again.");
+      }
+      const resigned = this.currentPlayer;
+      const winner = opponent(resigned);
+      const move = { type: "resign", color: resigned };
+      this.moveHistory.push(move);
+      this.gameOver = true;
+      this.result = {
+        type: "resignation",
+        winner,
+        winnerName: COLORS[winner],
+        resigned,
+        black: null,
+        white: null,
+        margin: null,
+        territory: createBoard(this.size)
+      };
+      this.message = `${COLORS[resigned]} resigned. ${COLORS[winner]} wins.`;
       return { ok: true, move, snapshot: this.snapshot() };
     }
 
@@ -168,6 +222,80 @@
       });
     }
 
+    scoreGame() {
+      const visited = new Set();
+      let black = 0;
+      let white = this.komi;
+      const territory = createBoard(this.size);
+
+      for (let y = 0; y < this.size; y += 1) {
+        for (let x = 0; x < this.size; x += 1) {
+          const value = this.board[y][x];
+          if (value === BLACK) {
+            black += 1;
+          } else if (value === WHITE) {
+            white += 1;
+          } else {
+            const key = `${x},${y}`;
+            if (visited.has(key)) {
+              continue;
+            }
+            const region = this.collectEmptyRegion(x, y, visited);
+            if (region.borders.size === 1 && region.borders.has(BLACK)) {
+              black += region.points.length;
+              for (const point of region.points) {
+                territory[point.y][point.x] = BLACK;
+              }
+            } else if (region.borders.size === 1 && region.borders.has(WHITE)) {
+              white += region.points.length;
+              for (const point of region.points) {
+                territory[point.y][point.x] = WHITE;
+              }
+            }
+          }
+        }
+      }
+
+      const winner = black > white ? BLACK : WHITE;
+      const margin = Math.abs(black - white);
+      return {
+        type: "score",
+        black,
+        white,
+        winner,
+        winnerName: COLORS[winner],
+        margin,
+        territory
+      };
+    }
+
+    collectEmptyRegion(x, y, visited) {
+      const stack = [{ x, y }];
+      const points = [];
+      const borders = new Set();
+
+      while (stack.length > 0) {
+        const point = stack.pop();
+        const key = `${point.x},${point.y}`;
+        if (visited.has(key)) {
+          continue;
+        }
+        visited.add(key);
+        points.push(point);
+
+        for (const neighbor of this.neighbors(point.x, point.y)) {
+          const value = this.board[neighbor.y][neighbor.x];
+          if (value === EMPTY) {
+            stack.push(neighbor);
+          } else {
+            borders.add(value);
+          }
+        }
+      }
+
+      return { points, borders };
+    }
+
     snapshot() {
       return {
         size: this.size,
@@ -179,6 +307,12 @@
         lastMove: this.lastMove ? { ...this.lastMove } : null,
         lastCaptures: this.lastCaptures.map((stone) => ({ ...stone })),
         koPoint: this.koPoint ? { ...this.koPoint } : null,
+        consecutivePasses: this.consecutivePasses,
+        gameOver: this.gameOver,
+        result: this.result ? {
+          ...this.result,
+          territory: this.result.territory ? cloneBoard(this.result.territory) : null
+        } : null,
         message: this.message
       };
     }
@@ -197,6 +331,10 @@
       this.boardLabel = documentRef.getElementById("board-label");
       this.blackCaptures = documentRef.getElementById("black-captures");
       this.whiteCaptures = documentRef.getElementById("white-captures");
+      this.passButton = documentRef.getElementById("pass-button");
+      this.resignButton = documentRef.getElementById("resign-button");
+      this.scoreCard = documentRef.getElementById("score-card");
+      this.scoreSummary = documentRef.getElementById("score-summary");
       this.hoverPoint = null;
       this.game = new GoGame({
         size: Number(this.boardSize.value),
@@ -234,6 +372,18 @@
         }
         this.game.play(point.x, point.y);
         this.hoverPoint = point;
+        this.render();
+      });
+
+      this.passButton.addEventListener("click", () => {
+        this.game.pass();
+        this.hoverPoint = null;
+        this.render();
+      });
+
+      this.resignButton.addEventListener("click", () => {
+        this.game.resign();
+        this.hoverPoint = null;
         this.render();
       });
     }
@@ -276,16 +426,38 @@
       this.boardLabel.textContent = `${snapshot.size}x${snapshot.size}`;
       this.blackCaptures.textContent = String(snapshot.captures[BLACK]);
       this.whiteCaptures.textContent = String(snapshot.captures[WHITE]);
+      this.passButton.disabled = snapshot.gameOver;
+      this.resignButton.disabled = snapshot.gameOver;
+      this.renderScore(snapshot);
       this.renderMoveList(snapshot);
       this.drawBoard(snapshot);
+    }
+
+    renderScore(snapshot) {
+      if (!snapshot.result || snapshot.result.type !== "score") {
+        this.scoreCard.hidden = !snapshot.result;
+        this.scoreSummary.textContent = snapshot.result
+          ? `${snapshot.result.winnerName} wins by resignation.`
+          : "";
+        return;
+      }
+
+      this.scoreCard.hidden = false;
+      this.scoreSummary.textContent = `Black ${snapshot.result.black.toFixed(1)} - White ${snapshot.result.white.toFixed(1)}. ${snapshot.result.winnerName} wins by ${snapshot.result.margin.toFixed(1)}.`;
     }
 
     renderMoveList(snapshot) {
       this.moveList.replaceChildren();
       for (const move of snapshot.moveHistory) {
         const item = this.document.createElement("li");
-        const captureText = move.captures && move.captures.length > 0 ? ` x${move.captures.length}` : "";
-        item.textContent = `${COLORS[move.color]} ${move.label}${captureText}`;
+        if (move.type === "pass") {
+          item.textContent = `${COLORS[move.color]} pass`;
+        } else if (move.type === "resign") {
+          item.textContent = `${COLORS[move.color]} resigns`;
+        } else {
+          const captureText = move.captures && move.captures.length > 0 ? ` x${move.captures.length}` : "";
+          item.textContent = `${COLORS[move.color]} ${move.label}${captureText}`;
+        }
         this.moveList.appendChild(item);
       }
     }
@@ -329,6 +501,7 @@
       }
 
       this.drawRuleMarkers(snapshot, layout);
+      this.drawTerritory(snapshot, layout);
     }
 
     drawStarPoints(size, layout) {
@@ -398,6 +571,25 @@
         ctx.beginPath();
         ctx.arc(cx, cy, 5, 0, Math.PI * 2);
         ctx.fill();
+      }
+    }
+
+    drawTerritory(snapshot, layout) {
+      if (!snapshot.result || snapshot.result.type !== "score" || !snapshot.result.territory) {
+        return;
+      }
+      const ctx = this.context;
+      for (let y = 0; y < snapshot.size; y += 1) {
+        for (let x = 0; x < snapshot.size; x += 1) {
+          const owner = snapshot.result.territory[y][x];
+          if (owner === EMPTY) {
+            continue;
+          }
+          const cx = layout.margin + x * layout.gap;
+          const cy = layout.margin + y * layout.gap;
+          ctx.fillStyle = owner === BLACK ? "rgba(20, 18, 15, 0.24)" : "rgba(255, 255, 255, 0.46)";
+          ctx.fillRect(cx - 6, cy - 6, 12, 12);
+        }
       }
     }
   }
