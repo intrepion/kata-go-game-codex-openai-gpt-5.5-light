@@ -40,9 +40,41 @@ _Avoid_: Loop rule, repeat ban
 A turn where a player places no stone and hands play to the opponent.
 _Avoid_: Skip, forfeit
 
+**Resignation**:
+A player action that immediately ends the game by conceding victory to the opponent.
+_Avoid_: Quit, surrender
+
+**Two-Pass End**:
+The game-ending state reached when both players pass on consecutive turns.
+_Avoid_: Manual scoring trigger, timeout
+
 **Area Scoring**:
 The scoring model where a player's score is based on stones on the board plus controlled empty intersections.
 _Avoid_: Territory scoring, Japanese scoring
+
+**Illegal Move**:
+A rejected attempted move, such as playing on an occupied intersection, violating ko, or making a suicide move that captures no opposing stones.
+_Avoid_: Invalid click, bad move
+
+**Suicide Move**:
+A move that would leave the placed stone's group with no liberties after captures are resolved.
+_Avoid_: Self-capture, self-kill
+
+**Score**:
+The final count produced by area scoring after the game ends.
+_Avoid_: Points, total
+
+**Move History**:
+The ordered record of moves, passes, captures, resignations, and undo steps in the current game.
+_Avoid_: Log, transcript
+
+**Undo**:
+A local play action that restores the game to an earlier move history state.
+_Avoid_: Rewind, takeback
+
+**Move List**:
+The visible sequence of moves and passes in the current game.
+_Avoid_: SGF, replay
 
 **Local Play**:
 Human-versus-human play on the same device.
