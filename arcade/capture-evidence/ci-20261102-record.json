@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "workflowCommit": "3a3911e1304d8155e1043a2701967f10753edb7e",
+  "sourceCommit": "5fdb35d281e9b66c13230e8f861b462369635f1b",
+  "runId": "41379808420",
+  "url": "http://127.0.0.1:4180/",
+  "inputs": {
+    "index.html": "6eb88dfe98c32f648439ff6402072ede6d4022198b909de5827f14f5356d856d",
+    "styles.css": "79ca3cd4bdc36949a7dd258d38fa72610bde4fc516a41d2accc5405f160f5267",
+    "game.js": "bbaf6b66e53356891b60455c5cfce4965fe7430f935e2804d55c85572eb0d9f7"
+  },
+  "browser": "153.0.8010.12",
+  "viewport": {
+    "width": 1280,
+    "height": 1000
+  },
+  "screenshots": [
+    "go-01.png",
+    "go-02.png"
+  ]
+}
