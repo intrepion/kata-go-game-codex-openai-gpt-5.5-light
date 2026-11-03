@@ -8,6 +8,6 @@
     "check": "node --check game.js && npm test && npm run test:browser"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0"
+    "@playwright/test": "1.64.1"
   }
 }
